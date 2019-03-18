@@ -80,8 +80,10 @@ class Experiment:
             for param, value in filters:
                 p = e.params.loc[0, param]
                 ptype = type(p)
-
-                if p != ptype(value):
+                try:
+                    if p != ptype(value):
+                        return False
+                except:
                     return False
 
             return True
