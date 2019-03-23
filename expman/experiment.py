@@ -77,7 +77,7 @@ class Experiment:
     def filter(cls, filters, exps):
 
         def __filter_exp(e):
-            for param, value in filters:
+            for param, value in filters.items():
                 p = e.params.loc[0, param]
                 ptype = type(p)
                 try:
@@ -89,7 +89,7 @@ class Experiment:
             return True
 
         return filter(__filter_exp, exps)
-
+        
     @classmethod
     def from_dir(cls, exp_dir, main=None):
         root = os.path.dirname(exp_dir.rstrip('/'))
@@ -207,7 +207,7 @@ class Experiment:
         self.results = pd.DataFrame(metrics, index=(ts,))
         self.results.to_csv(self.path_to('results'))
         with pd.option_context('display.width', None), pd.option_context('max_columns', None):
-            print(self.results)
+            print(self.results)        
 
     def add_parameter(self, key, value):
         assert key not in self.params, "Parameter already exists: '{}'".format(key)
