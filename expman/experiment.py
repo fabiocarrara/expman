@@ -50,7 +50,7 @@ class Experiment:
             abbrev.append(main_param)
             abbrev.extend(secondary_params)
         else:
-            abbrev = abbrev_params.values()
+            abbrev = sorted(abbrev_params.values())
 
         abbrev = '_'.join(abbrev)
         return abbrev
@@ -131,7 +131,18 @@ class Experiment:
         # parameters of this run
         if isinstance(params, argparse.Namespace):
             params = vars(params)
-        params = {k: v for k, v in params.items() if k not in self.ignore}
+        
+        def _sanitize(v):
+            if isinstance(v, (list, tuple)):
+                v = map(str, v)
+                v = ';'.join(v)
+
+            if isinstance(v, str):
+                v = v.replace(os.sep, '|')
+                
+            return v
+        
+        params = {k: _sanitize(v) for k, v in params.items() if k not in self.ignore}
         self.params = pd.DataFrame(params, index=[0])
 
         # main param (for naming the run)
@@ -188,12 +199,12 @@ class Experiment:
 
     def path_to(self, what):
         # assert what in self.filenames, "Unknown run resource: '{}'".format(what)
-        basename = self.filenames[what] if what in self.filenames else what
+        basename = self.filenames.get(what, what)
         path = os.path.join(self.path, basename)
         return path
 
     def ckpt(self, which='best'):
-        ckpt_path = os.path.join(self.path_to('ckpt'), self.filenames[which])
+        ckpt_path = os.path.join(self.path_to('ckpt'), self.filenames.get(which, which))
         return ckpt_path
 
     def push_log(self, metrics):
