@@ -59,12 +59,12 @@ class Experiment:
     def collect_all(cls, exps, what, index=None):
 
         def collect(exp):
-            params = pd.read_csv(exp.path_to('params'))
+            params = pd.read_csv(exp.path_to('params'), float_precision='round_trip')
             what_csv = exp.path_to(what)
             if not os.path.exists(what_csv):
                 return pd.DataFrame()
 
-            stuff = pd.read_csv(what_csv, index_col=index)
+            stuff = pd.read_csv(what_csv, index_col=index, float_precision='round_trip')
             params['__tmp_key'] = 0
             stuff['__tmp_key'] = 0
             return pd.merge(params, stuff, on='__tmp_key').drop('__tmp_key', axis=1)
@@ -78,9 +78,9 @@ class Experiment:
 
         def __filter_exp(e):
             for param, value in filters.items():
-                p = e.params.loc[0, param]
-                ptype = type(p)
                 try:
+                    p = e.params.loc[0, param]
+                    ptype = type(p)
                     if p != ptype(value):
                         return False
                 except:
