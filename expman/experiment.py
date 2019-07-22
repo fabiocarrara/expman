@@ -7,6 +7,16 @@ from io import StringIO
 import pandas as pd
 
 
+def exp_filter(string):
+    if '=' not in string:
+        raise argparse.ArgumentTypeError(
+            f'Filter {string} is not in format <param1>=<value1>[, <param2>=<value2>[, ...]]')
+    filters = string.split(',')
+    filters = map(lambda x: x.split('='), filters)
+    filters = {k: v for k, v in filters}
+    return filters
+
+
 class Experiment:
     filenames = {
         'params': 'params.csv',
@@ -89,7 +99,7 @@ class Experiment:
             return True
 
         return filter(__filter_exp, exps)
-        
+
     @classmethod
     def from_dir(cls, exp_dir, main=None):
         root = os.path.dirname(exp_dir.rstrip('/'))
@@ -131,7 +141,7 @@ class Experiment:
         # parameters of this run
         if isinstance(params, argparse.Namespace):
             params = vars(params)
-        
+
         def _sanitize(v):
             if isinstance(v, (list, tuple)):
                 v = map(str, v)
@@ -139,9 +149,9 @@ class Experiment:
 
             if isinstance(v, str):
                 v = v.replace(os.sep, '|')
-                
+
             return v
-        
+
         params = {k: _sanitize(v) for k, v in params.items() if k not in self.ignore}
         self.params = pd.DataFrame(params, index=[0])
 
@@ -218,7 +228,7 @@ class Experiment:
         self.results = pd.DataFrame(metrics, index=(ts,))
         self.results.to_csv(self.path_to('results'))
         with pd.option_context('display.width', None), pd.option_context('max_columns', None):
-            print(self.results)        
+            print(self.results)
 
     def add_parameter(self, key, value):
         assert key not in self.params, "Parameter already exists: '{}'".format(key)

@@ -1,4 +1,4 @@
-from .experiment import Experiment
+from .experiment import Experiment, exp_filter
 
 abbreviate = Experiment.abbreviate
 collect_all = Experiment.collect_all
