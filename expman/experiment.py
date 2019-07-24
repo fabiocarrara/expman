@@ -71,10 +71,18 @@ class Experiment:
         def collect(exp):
             params = pd.read_csv(exp.path_to('params'), float_precision='round_trip')
             what_csv = exp.path_to(what)
-            if not os.path.exists(what_csv):
-                return pd.DataFrame()
 
-            stuff = pd.read_csv(what_csv, index_col=index, float_precision='round_trip')
+            if os.path.exists(what_csv):
+                stuff = pd.read_csv(what_csv, index_col=index)
+            else:  # try globbing
+                stuff = os.path.join(exp.path, what)
+                stuff = list(glob(stuff))
+                if len(stuff) == 0:
+                    return pd.DataFrame()
+
+                stuff = map(lambda x: pd.read_csv(x, index_col=index), stuff)
+                stuff = pd.concat(stuff, ignore_index=True)
+
             params['__tmp_key'] = 0
             stuff['__tmp_key'] = 0
             return pd.merge(params, stuff, on='__tmp_key').drop('__tmp_key', axis=1)
