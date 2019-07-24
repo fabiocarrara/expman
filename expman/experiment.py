@@ -252,6 +252,20 @@ class Experiment:
         self._update_run_dir()
         self.params.to_csv(self.path_to('params'), index=False)
 
+    def require_csv(self, path, index=None):
+        csv_path = self.path_to(path)
+        if os.path.exists(csv_path):
+            data = pd.read_csv(csv_path)
+            data = data.set_index(index) if index else data
+            return data, csv_path
+        elif isinstance(index, str):
+            index = pd.Index([], name=index)
+        elif isinstance(index, (list, tuple)):
+            empty = [[]] * len(index)
+            index = pd.MultiIndex(levels=empty, labels=empty, names=index)
+        
+        return pd.DataFrame([], index=index), csv_path
+
     def _update_run_dir(self):
         old_run_dir = self.path
         if self.existing:
