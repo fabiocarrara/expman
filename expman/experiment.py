@@ -174,6 +174,7 @@ class Experiment:
         self.name = self.abbreviate(self.params, self.main)
         self.path = os.path.join(self.root, self.name)
         self.existing = os.path.exists(self.path)
+        self.found = self.existing
 
         if not self.existing:
             self.log = pd.DataFrame()
@@ -181,7 +182,7 @@ class Experiment:
 
             if self.create:
                 os.makedirs(self.path)
-                os.makedirs(self.path_to('ckpt'))
+                # os.makedirs(self.path_to('ckpt'))
                 self.params.to_csv(self.path_to('params'), index=False)
                 self.existing = True
             else:
