@@ -80,13 +80,17 @@ class Experiment:
                 if len(stuff) == 0:
                     return pd.DataFrame()
 
-                stuff = map(lambda x: pd.read_csv(x, index_col=index), stuff)
+                stuff = map(lambda x: pd.read_csv(x, index_col=index, float_precision='round_trip'), stuff)
                 stuff = pd.concat(stuff, ignore_index=True)
 
-            params['__tmp_key'] = 0
-            stuff['__tmp_key'] = 0
-            return pd.merge(params, stuff, on='__tmp_key').drop('__tmp_key', axis=1)
-
+            params['exp_id'] = collect.exp_id
+            stuff['exp_id'] = collect.exp_id
+            collect.exp_id += 1
+            
+            return pd.merge(params, stuff, on='exp_id')
+            
+        collect.exp_id = 0
+        
         results = map(collect, exps)
         results = pd.concat(results, ignore_index=True, sort=False)
         return results
