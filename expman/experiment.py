@@ -10,7 +10,7 @@ import pandas as pd
 def exp_filter(string):
     if '=' not in string:
         raise argparse.ArgumentTypeError(
-            f'Filter {string} is not in format <param1>=<value1>[, <param2>=<value2>[, ...]]')
+            'Filter {} is not in format <param1>=<value1>[, <param2>=<value2>[, ...]]'.format(string))
     filters = string.split(',')
     filters = map(lambda x: x.split('='), filters)
     filters = {k: v for k, v in filters}
