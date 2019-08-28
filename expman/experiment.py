@@ -47,6 +47,7 @@ class Experiment:
     def abbreviate(cls, params, main=None):
         if isinstance(params, pd.DataFrame):
             params = params.iloc[0]
+            params = params.replace({pd.np.nan: None})
 
         if main not in params:
             main = None
