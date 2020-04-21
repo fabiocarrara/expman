@@ -4,6 +4,7 @@ import shutil
 from glob import glob
 from io import StringIO
 
+import numpy as np
 import pandas as pd
 
 
@@ -47,7 +48,7 @@ class Experiment:
     def abbreviate(cls, params, main=None):
         if isinstance(params, pd.DataFrame):
             params = params.iloc[0]
-            params = params.replace({pd.np.nan: None})
+            params = params.replace({np.nan: None})
 
         if main not in params:
             main = None
