@@ -205,6 +205,9 @@ class Experiment:
             self.log = pd.read_csv(log_fname, index_col=0) if os.path.exists(log_fname) else pd.DataFrame()
             self.results = pd.read_csv(results_fname) if os.path.exists(results_fname) else pd.DataFrame()
 
+        # keep params as a pandas Series for elegant use
+        self.params = self.params.transpose()[0]
+
     def __str__(self):
         s = StringIO()
         print('Experiment Dir: {}'.format(self.path), file=s)
