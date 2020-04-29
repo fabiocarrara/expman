@@ -71,7 +71,7 @@ class Experiment:
     def collect_all(cls, exps, what, index=None):
 
         def collect(exp):
-            params = pd.read_csv(exp.path_to('params'), float_precision='round_trip')
+            params = exp.params.to_frame().transpose() # as DataFrame
             what_csv = exp.path_to(what)
 
             if os.path.exists(what_csv):
@@ -95,6 +95,14 @@ class Experiment:
         
         results = map(collect, exps)
         results = pd.concat(results, ignore_index=True, sort=False)
+        
+        # build minimal exp_name
+        params = results.loc[:,:'exp_id'].drop('exp_id', axis=1)
+        varying_params = params.loc[:, params.nunique() > 1]
+        exp_name = varying_params.apply(cls.abbreviate, axis=1)
+        idx = results.columns.get_loc('exp_id') + 1
+        results.insert(idx, 'exp_name', exp_name)
+        
         return results
 
     @classmethod
@@ -103,7 +111,7 @@ class Experiment:
         def __filter_exp(e):
             for param, value in filters.items():
                 try:
-                    p = e.params.loc[0, param]
+                    p = e.params[param]
                     ptype = type(p)
                     if p != ptype(value):
                         return False
@@ -122,7 +130,7 @@ class Experiment:
         assert os.path.exists(exp_dir), "Experiment directory not found: '{}'".format(exp_dir)
         assert os.path.exists(params), "Empty run directory found: '{}'".format(params)
 
-        params = pd.read_csv(params).to_dict(orient='record')[0]
+        params = cls._read_params(params)
         exp = cls(params, root=root, main=main, create=False)
         return exp
 
@@ -167,7 +175,7 @@ class Experiment:
             return v
 
         params = {k: _sanitize(v) for k, v in params.items() if k not in self.ignore}
-        self.params = pd.DataFrame(params, index=[0])
+        self.params = pd.Series(params, name='params')
 
         # main param (for naming the run)
         assert main is None or main in self.params, "'main' should be one of: ({}), got {}".format(
@@ -188,8 +196,7 @@ class Experiment:
 
             if self.create:
                 os.makedirs(self.path)
-                # os.makedirs(self.path_to('ckpt'))
-                self.params.to_csv(self.path_to('params'), index=False)
+                self.write_params()
                 self.existing = True
             else:
                 print("Run directory '{}' not found, but not created.".format(self.path))
@@ -201,19 +208,17 @@ class Experiment:
 
             assert os.path.exists(param_fname), "Empty run, parameters not found: '{}'".format(param_fname)
 
-            self.param = pd.read_csv(param_fname)
+            self.params = self._read_params(param_fname)
             self.log = pd.read_csv(log_fname, index_col=0) if os.path.exists(log_fname) else pd.DataFrame()
             self.results = pd.read_csv(results_fname) if os.path.exists(results_fname) else pd.DataFrame()
 
-        # keep params as a pandas Series for elegant use
-        self.params = self.params.transpose()[0]
 
     def __str__(self):
         s = StringIO()
         print('Experiment Dir: {}'.format(self.path), file=s)
         print('Params:', file=s)
         with pd.option_context('display.width', None), pd.option_context('max_columns', None):
-            self.params.to_string(s, index=False)
+            self.params.to_string(s)
 
         # if not self.results.empty:
         #     print('\nResults:', file=s)
@@ -252,7 +257,7 @@ class Experiment:
         assert key not in self.params, "Parameter already exists: '{}'".format(key)
         self.params[key] = value
         self._update_run_dir()
-        self.params.to_csv(self.path_to('params'), index=False)
+        self.write_params()
 
     def rename_parameter(self, key, new_key):
         assert key in self.params, "Cannot rename non-existent parameter: '{}'".format(key)
@@ -262,13 +267,13 @@ class Experiment:
         del self.params[key]
 
         self._update_run_dir()
-        self.params.to_csv(self.path_to('params'), index=False)
+        self.write_params()
 
     def remove_parameter(self, key):
         assert key in self.params, "Cannot remove non-existent parameter: '{}'".format(key)
         del self.params[key]
         self._update_run_dir()
-        self.params.to_csv(self.path_to('params'), index=False)
+        self.write_params()
 
     def require_csv(self, path, index=None):
         csv_path = self.path_to(path)
@@ -291,7 +296,15 @@ class Experiment:
             self.path = os.path.join(self.root, self.name)
             assert not os.path.exists(self.path), "Cannot rename run, new name exists: '{}'".format(self.path)
             shutil.move(old_run_dir, self.path)
-
+    
+    @staticmethod
+    def _read_params(path):
+        # read dataframe to pd.Series
+        return pd.read_csv(path, float_precision='round_trip').loc[0]
+    
+    def write_params(self):
+        # convert to DataFrame and write
+        self.params.to_frame().transpose().to_csv(self.path_to('params'))
 
 def test():
     parser = argparse.ArgumentParser(description='Experiment Manager Test')
