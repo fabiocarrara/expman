@@ -71,7 +71,7 @@ class Experiment:
     def collect_all(cls, exps, what, index=None):
 
         def collect(exp):
-            params = exp.params.to_frame().transpose() # as DataFrame
+            params = exp.params.to_frame().transpose().infer_objects() # as DataFrame
             what_csv = exp.path_to(what)
 
             if os.path.exists(what_csv):
