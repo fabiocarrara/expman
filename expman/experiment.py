@@ -304,7 +304,7 @@ class Experiment:
     
     def write_params(self):
         # convert to DataFrame and write
-        self.params.to_frame().transpose().to_csv(self.path_to('params'))
+        self.params.to_frame().transpose().to_csv(self.path_to('params'), index=False)
 
 def test():
     parser = argparse.ArgumentParser(description='Experiment Manager Test')
