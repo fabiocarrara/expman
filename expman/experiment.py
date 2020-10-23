@@ -8,6 +8,13 @@ import numpy as np
 import pandas as pd
 
 
+hash_naming = False
+
+def use_hash_naming(use_hashes):
+    assert isinstance(use_hashes, bool), "Value must be a boolean."
+    hash_naming = use_hashes
+    
+
 def exp_filter(string):
     if '=' not in string:
         raise argparse.ArgumentTypeError(
@@ -29,43 +36,31 @@ class Experiment:
     }
 
     @staticmethod
-    def _abbr(name, value, params, main):
-        is_main_param = main == name
+    def _abbr(name, value, params):
 
         def prefix_len(a, b):
             return len(os.path.commonprefix((a, b)))
 
-        if is_main_param:
-            prefix = ''
-        else:
-            prefix = [name[:prefix_len(p, name) + 1] for p in params.keys() if p != name]
-            prefix = max(prefix, key=lambda x: len(x)) if len(prefix) > 0 else name
+        prefix = [name[:prefix_len(p, name) + 1] for p in params.keys() if p != name]
+        prefix = max(prefix, key=lambda x: len(x)) if len(prefix) > 0 else name
 
-        sep = '-' if (type(value) == str and not is_main_param) else ''
+        sep = '-' if (type(value) == str) else ''
         return prefix, sep, str(value)
 
     @classmethod
-    def abbreviate(cls, params, main=None):
+    def abbreviate(cls, params):
         if isinstance(params, pd.DataFrame):
             params = params.iloc[0]
             params = params.replace({np.nan: None})
 
-        if main not in params:
-            main = None
-
-        abbrev_params = {k: '{}{}{}'.format(*cls._abbr(k, v, params, main)) for k, v in params.items()}
-
-        if main:
-            abbrev = []
-            main_param = abbrev_params[main]
-            secondary_params = sorted(v for k, v in abbrev_params.items() if k != main)
-            abbrev.append(main_param)
-            abbrev.extend(secondary_params)
+        if hash_naming:
+            exp_name = str(hash(frozenset(params.items())))
         else:
+            abbrev_params = {k: '{}{}{}'.format(*cls._abbr(k, v, params)) for k, v in params.items()}
             abbrev = sorted(abbrev_params.values())
-
-        abbrev = '_'.join(abbrev)
-        return abbrev
+            exp_name = '_'.join(abbrev)
+        
+        return exp_name
 
     @classmethod
     def collect_all(cls, exps, what, index=None):
@@ -123,7 +118,7 @@ class Experiment:
         return filter(__filter_exp, exps)
 
     @classmethod
-    def from_dir(cls, exp_dir, main=None):
+    def from_dir(cls, exp_dir):
         root = os.path.dirname(exp_dir.rstrip('/'))
         params = os.path.join(exp_dir, cls.filenames['params'])
 
@@ -131,18 +126,18 @@ class Experiment:
         assert os.path.exists(params), "Empty run directory found: '{}'".format(params)
 
         params = cls._read_params(params)
-        exp = cls(params, root=root, main=main, create=False)
+        exp = cls(params, root=root, create=False)
         return exp
 
     @classmethod
-    def gather(cls, root='runs/', main=None):
+    def gather(cls, root='runs/'):
         if cls.is_exp_dir(root):
             exps = [root, ]
         else:
             exps = glob(os.path.join(root, '*'))
             exps = filter(cls.is_exp_dir, exps)
 
-        exps = map(lambda x: cls.from_dir(x, main=main), exps)
+        exps = map(lambda x: cls.from_dir(x), exps)
         exps = filter(lambda x: x.existing, exps)
         return exps
 
@@ -155,7 +150,7 @@ class Experiment:
 
         return False
 
-    def __init__(self, params, root='runs/', ignore=(), main=None, create=True):
+    def __init__(self, params, root='runs/', ignore=(), create=True):
         # relative dir containing this run
         self.root = root
         # params to be ignored in the run naming
@@ -177,15 +172,10 @@ class Experiment:
         params = {k: _sanitize(v) for k, v in params.items() if k not in self.ignore}
         self.params = pd.Series(params, name='params')
 
-        # main param (for naming the run)
-        assert main is None or main in self.params, "'main' should be one of: ({}), got {}".format(
-            ','.join(self.params.keys()), main)
-        self.main = main
-
         # whether to create the run directory if not exists
         self.create = create
 
-        self.name = self.abbreviate(self.params, self.main)
+        self.name = self.abbreviate(self.params)
         self.path = os.path.join(self.root, self.name)
         self.existing = os.path.exists(self.path)
         self.found = self.existing
@@ -292,7 +282,7 @@ class Experiment:
     def _update_run_dir(self):
         old_run_dir = self.path
         if self.existing:
-            self.name = self.abbreviate(self.params, self.main)
+            self.name = self.abbreviate(self.params)
             self.path = os.path.join(self.root, self.name)
             assert not os.path.exists(self.path), "Cannot rename run, new name exists: '{}'".format(self.path)
             shutil.move(old_run_dir, self.path)
@@ -316,6 +306,6 @@ def test():
     parser.set_defaults(no_cuda=False)
     args = parser.parse_args()
 
-    run = Experiment(args, root='prova', ignore=['no_cuda'], main='model')
+    run = Experiment(args, root='prova', ignore=['no_cuda'])
     print(run)
     print(run.ckpt('best'))
