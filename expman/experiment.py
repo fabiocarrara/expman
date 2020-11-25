@@ -26,8 +26,9 @@ def exp_filter(string):
 
 
 class Experiment:
+
     filenames = {
-        'params': 'params.csv',
+        'params': 'params.json',
         'log': 'log.csv',
         'results': 'results.csv',
         'ckpt': 'ckpt',
@@ -289,12 +290,15 @@ class Experiment:
     
     @staticmethod
     def _read_params(path):
-        # read dataframe to pd.Series
-        return pd.read_csv(path, float_precision='round_trip').loc[0]
+        # read json to pd.Series
+        params = pd.read_json(path, typ='series')
+        # transform lists to tuples (for hashability)
+        params = params.apply(lambda x: tuple(x) if isinstance(x, list) else x)
+        return params
     
     def write_params(self):
-        # convert to DataFrame and write
-        self.params.to_frame().transpose().to_csv(self.path_to('params'), index=False)
+        # write Series as json
+        self.params.to_json(self.path_to('params'))
 
 def test():
     parser = argparse.ArgumentParser(description='Experiment Manager Test')
