@@ -1,6 +1,7 @@
 import argparse
 import os
 import shutil
+import numbers
 from glob import glob
 from io import StringIO
 
@@ -43,10 +44,21 @@ class Experiment:
             return len(os.path.commonprefix((a, b)))
 
         prefix = [name[:prefix_len(p, name) + 1] for p in params.keys() if p != name]
-        prefix = max(prefix, key=lambda x: len(x)) if len(prefix) > 0 else name
+        prefix = max(prefix, key=len) if len(prefix) > 0 else name
 
-        sep = '-' if (type(value) == str) else ''
-        return prefix, sep, str(value)
+        sep = ''
+        if isinstance(value, str):
+            sep = '-'
+        elif isinstance(value, numbers.Number):
+            value = f'{value:g}'
+            sep = '-' if prefix[-1].isdigit() else ''
+        elif isinstance(value, (list, tuple)):
+            value = map(str, value)
+            value = map(lambda v: v.replace(os.sep, '|'), value)
+            value = ','.join(list(value))
+            sep = '-'
+
+        return prefix, sep, value
 
     @classmethod
     def abbreviate(cls, params):
@@ -150,6 +162,27 @@ class Experiment:
                 return True
 
         return False
+    
+    @classmethod
+    def update_exp_dir(cls, exp_dir):
+        exp_dir = exp_dir.rstrip('/')
+        root = os.path.dirname(exp_dir)
+        name = os.path.basename(exp_dir)
+        params = os.path.join(exp_dir, cls.filenames['params'])
+
+        assert os.path.exists(exp_dir), "Experiment directory not found: '{}'".format(exp_dir)
+        assert os.path.exists(params), "Empty run directory found: '{}'".format(params)
+
+        params = cls._read_params(params)
+        new_name = cls.abbreviate(params)
+        
+        if name != new_name:
+            new_exp_dir = os.path.join(root, new_name)
+            assert not os.path.exists(new_exp_dir), \
+                "Destination experiment directory already exists: '{}'".format(new_exp_dir)
+            
+            print('Renaming:\n  {} into\n  {}'.format(exp_dir, new_exp_dir))
+            shutil.move(exp_dir, new_exp_dir)
 
     def __init__(self, params, root='runs/', ignore=(), create=True):
         # relative dir containing this run
@@ -159,17 +192,10 @@ class Experiment:
         # parameters of this run
         if isinstance(params, argparse.Namespace):
             params = vars(params)
-
+        
         def _sanitize(v):
-            if isinstance(v, (list, tuple)):
-                v = map(str, v)
-                v = ';'.join(v)
-
-            if isinstance(v, str):
-                v = v.replace(os.sep, '|')
-
-            return v
-
+            return tuple(v) if isinstance(v, list) else v
+            
         params = {k: _sanitize(v) for k, v in params.items() if k not in self.ignore}
         self.params = pd.Series(params, name='params')
 
