@@ -50,7 +50,7 @@ class Experiment:
         if isinstance(value, str):
             sep = '-'
         elif isinstance(value, numbers.Number):
-            value = f'{value:g}'
+            value = '{:g}'.format(value)
             sep = '-' if prefix[-1].isdigit() else ''
         elif isinstance(value, (list, tuple)):
             value = map(str, value)
