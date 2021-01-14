@@ -78,28 +78,30 @@ class Experiment:
         return exp_name
 
     @classmethod
-    def collect_all(cls, exps, what, index=None):
+    def collect_all(cls, exps, what=None, index=None):
 
         def collect(exp):
             params = exp.params.to_frame().transpose().infer_objects() # as DataFrame
-            what_csv = exp.path_to(what)
-
-            if os.path.exists(what_csv):
-                stuff = pd.read_csv(what_csv, index_col=index)
-            else:  # try globbing
-                stuff = os.path.join(exp.path, what)
-                stuff = list(glob(stuff))
-                if len(stuff) == 0:
-                    return pd.DataFrame()
-
-                stuff = map(lambda x: pd.read_csv(x, index_col=index, float_precision='round_trip'), stuff)
-                stuff = pd.concat(stuff, ignore_index=True)
-
             params['exp_id'] = collect.exp_id
-            stuff['exp_id'] = collect.exp_id
+            stuff = None
+
+            if what is not None:
+                what_csv = exp.path_to(what)
+                if os.path.exists(what_csv):
+                    stuff = pd.read_csv(what_csv, index_col=index)
+                else:  # try globbing
+                    what_files = os.path.join(exp.path, what)
+                    what_files = list(glob(what_files))
+                    if len(what_files) == 0:
+                        return pd.DataFrame()
+
+                    stuff = map(lambda x: pd.read_csv(x, index_col=index, float_precision='round_trip'), what_files)
+                    stuff = pd.concat(stuff, ignore_index=True)
+
+                stuff['exp_id'] = collect.exp_id
+
             collect.exp_id += 1
-            
-            return pd.merge(params, stuff, on='exp_id')
+            return pd.merge(params, stuff, on='exp_id') if stuff is not None else params
             
         collect.exp_id = 0
         
