@@ -1,5 +1,6 @@
 import argparse
 import os
+import hashlib
 import shutil
 import numbers
 from glob import glob
@@ -11,7 +12,8 @@ import pandas as pd
 
 hash_naming = False
 
-def use_hash_naming(use_hashes):
+def use_hash_naming(use_hashes=True):
+    global hash_naming
     assert isinstance(use_hashes, bool), "Value must be a boolean."
     hash_naming = use_hashes
     
@@ -67,7 +69,7 @@ class Experiment:
             params = params.replace({np.nan: None})
 
         if hash_naming:
-            exp_name = str(hash(frozenset(params.items())))
+            exp_name = hashlib.md5(str(sorted(params.items())).encode()).hexdigest()
         else:
             abbrev_params = {k: '{}{}{}'.format(*cls._abbr(k, v, params)) for k, v in params.items()}
             abbrev = sorted(abbrev_params.values())
