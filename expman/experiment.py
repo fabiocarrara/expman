@@ -36,14 +36,7 @@ def exp_filter(string):
 
 class Experiment:
 
-    filenames = {
-        'params': 'params.json',
-        'log': 'log.csv',
-        'results': 'results.csv',
-        'ckpt': 'ckpt',
-        'last': 'last.pth',
-        'best': 'best.pth',
-    }
+    PARAM_FILENAME = 'params.json'
 
     @staticmethod
     def _abbr(name, value, params):
@@ -143,7 +136,7 @@ class Experiment:
     @classmethod
     def from_dir(cls, exp_dir):
         root = os.path.dirname(exp_dir.rstrip('/'))
-        params = os.path.join(exp_dir, cls.filenames['params'])
+        params = os.path.join(exp_dir, cls.PARAM_FILENAME)
 
         assert os.path.exists(exp_dir), "Experiment directory not found: '{}'".format(exp_dir)
         assert os.path.exists(params), "Empty run directory found: '{}'".format(params)
@@ -167,7 +160,7 @@ class Experiment:
     @classmethod
     def is_exp_dir(cls, exp_dir):
         if os.path.isdir(exp_dir):
-            params = os.path.join(exp_dir, cls.filenames['params'])
+            params = os.path.join(exp_dir, cls.PARAM_FILENAME)
             if os.path.exists(params):
                 return True
 
@@ -178,7 +171,7 @@ class Experiment:
         exp_dir = exp_dir.rstrip('/')
         root = os.path.dirname(exp_dir)
         name = os.path.basename(exp_dir)
-        params = os.path.join(exp_dir, cls.filenames['params'])
+        params = os.path.join(exp_dir, cls.PARAM_FILENAME)
 
         assert os.path.exists(exp_dir), "Experiment directory not found: '{}'".format(exp_dir)
         assert os.path.exists(params), "Empty run directory found: '{}'".format(params)
@@ -218,9 +211,6 @@ class Experiment:
         self.found = self.existing
 
         if not self.existing:
-            self.log = pd.DataFrame()
-            self.results = pd.DataFrame()
-
             if self.create:
                 os.makedirs(self.path)
                 self.write_params()
@@ -229,15 +219,9 @@ class Experiment:
                 print("Run directory '{}' not found, but not created.".format(self.path))
 
         else:
-            log_fname = self.path_to('log')
-            param_fname = self.path_to('params')
-            results_fname = self.path_to('results')
-
+            param_fname = self.path_to(self.PARAM_FILENAME)
             assert os.path.exists(param_fname), "Empty run, parameters not found: '{}'".format(param_fname)
-
             self.params = self._read_params(param_fname)
-            self.log = pd.read_csv(log_fname, index_col=0) if os.path.exists(log_fname) else pd.DataFrame()
-            self.results = pd.read_csv(results_fname) if os.path.exists(results_fname) else pd.DataFrame()
 
 
     def __str__(self):
@@ -247,38 +231,14 @@ class Experiment:
         with pd.option_context('display.width', None), pd.option_context('max_columns', None):
             self.params.to_string(s)
 
-        # if not self.results.empty:
-        #     print('\nResults:', file=s)
-        #     with pd.option_context('display.width', None), pd.option_context('max_columns', None):
-        #         self.results.to_string(s, index=False)
-
         return s.getvalue()
 
     def __repr__(self):
         return self.__str__()
 
-    def path_to(self, what):
-        # assert what in self.filenames, "Unknown run resource: '{}'".format(what)
-        basename = self.filenames.get(what, what)
-        path = os.path.join(self.path, basename)
+    def path_to(self, path):
+        path = os.path.join(self.path, path)
         return path
-
-    def ckpt(self, which='best'):
-        ckpt_path = os.path.join(self.path_to('ckpt'), self.filenames.get(which, which))
-        return ckpt_path
-
-    def push_log(self, metrics):
-        ts = pd.to_datetime('now')
-        metrics = pd.DataFrame(metrics, index=(ts,))
-        self.log = pd.concat((self.log, metrics))
-        self.log.to_csv(self.path_to('log'))
-
-    def write_results(self, metrics):
-        ts = pd.to_datetime('now')
-        self.results = pd.DataFrame(metrics, index=(ts,))
-        self.results.to_csv(self.path_to('results'))
-        with pd.option_context('display.width', None), pd.option_context('max_columns', None):
-            print(self.results)
 
     def add_parameter(self, key, value):
         assert key not in self.params, "Parameter already exists: '{}'".format(key)
@@ -302,20 +262,6 @@ class Experiment:
         self._update_run_dir()
         self.write_params()
 
-    def require_csv(self, path, index=None):
-        csv_path = self.path_to(path)
-        if os.path.exists(csv_path):
-            data = pd.read_csv(csv_path)
-            data = data.set_index(index) if index else data
-            return data, csv_path
-        elif isinstance(index, str):
-            index = pd.Index([], name=index)
-        elif isinstance(index, (list, tuple)):
-            empty = [[]] * len(index)
-            index = pd.MultiIndex(levels=empty, labels=empty, names=index)
-        
-        return pd.DataFrame([], index=index), csv_path
-
     def _update_run_dir(self):
         old_run_dir = self.path
         if self.existing:
@@ -334,7 +280,7 @@ class Experiment:
     
     def write_params(self):
         # write Series as json
-        self.params.to_json(self.path_to('params'))
+        self.params.to_json(self.path_to(self.PARAM_FILENAME))
 
 def test():
     parser = argparse.ArgumentParser(description='Experiment Manager Test')
@@ -348,4 +294,4 @@ def test():
 
     run = Experiment(args, root='prova', ignore=['no_cuda'])
     print(run)
-    print(run.ckpt('best'))
+    print(run.path_to('ckpt/best.h5'))
