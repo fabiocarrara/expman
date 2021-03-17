@@ -1,8 +1,7 @@
 from .experiment import Experiment, exp_filter, use_hash_naming
+from .exp_group import ExpGroup
 
 abbreviate = Experiment.abbreviate
-collect_all = Experiment.collect_all
-filter = Experiment.filter
 from_dir = Experiment.from_dir
-gather = Experiment.gather
+gather = ExpGroup.gather
 is_exp_dir = Experiment.is_exp_dir

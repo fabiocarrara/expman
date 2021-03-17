@@ -77,63 +77,6 @@ class Experiment:
         return exp_name
 
     @classmethod
-    def collect_all(cls, exps, what=None, index=None):
-
-        def collect(exp):
-            params = exp.params.to_frame().transpose().infer_objects() # as DataFrame
-            params['exp_id'] = collect.exp_id
-            stuff = None
-
-            if what is not None:
-                what_csv = exp.path_to(what)
-                if os.path.exists(what_csv):
-                    stuff = pd.read_csv(what_csv, index_col=index)
-                else:  # try globbing
-                    what_files = os.path.join(exp.path, what)
-                    what_files = list(glob(what_files))
-                    if len(what_files) == 0:
-                        return pd.DataFrame()
-
-                    stuff = map(lambda x: pd.read_csv(x, index_col=index, float_precision='round_trip'), what_files)
-                    stuff = pd.concat(stuff, ignore_index=True)
-
-                stuff['exp_id'] = collect.exp_id
-
-            collect.exp_id += 1
-            return pd.merge(params, stuff, on='exp_id') if stuff is not None else params
-            
-        collect.exp_id = 0
-        
-        results = map(collect, exps)
-        results = pd.concat(results, ignore_index=True, sort=False)
-        
-        # build minimal exp_name
-        params = results.loc[:,:'exp_id'].drop('exp_id', axis=1)
-        varying_params = params.loc[:, params.nunique() > 1]
-        exp_name = varying_params.apply(cls.abbreviate, axis=1)
-        idx = results.columns.get_loc('exp_id') + 1
-        results.insert(idx, 'exp_name', exp_name)
-        
-        return results
-
-    @classmethod
-    def filter(cls, filters, exps):
-
-        def __filter_exp(e):
-            for param, value in filters.items():
-                try:
-                    p = e.params[param]
-                    ptype = type(p)
-                    if p != ptype(value):
-                        return False
-                except:
-                    return False
-
-            return True
-
-        return filter(__filter_exp, exps)
-
-    @classmethod
     def from_dir(cls, exp_dir):
         root = os.path.dirname(exp_dir.rstrip('/'))
         params = os.path.join(exp_dir, cls.PARAM_FILENAME)
@@ -144,18 +87,6 @@ class Experiment:
         params = cls._read_params(params)
         exp = cls(params, root=root, create=False)
         return exp
-
-    @classmethod
-    def gather(cls, root='runs/'):
-        if cls.is_exp_dir(root):
-            exps = [root, ]
-        else:
-            exps = glob(os.path.join(root, '*'))
-            exps = filter(cls.is_exp_dir, exps)
-
-        exps = map(lambda x: cls.from_dir(x), exps)
-        exps = filter(lambda x: x.existing, exps)
-        return exps
 
     @classmethod
     def is_exp_dir(cls, exp_dir):

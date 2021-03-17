@@ -1,22 +1,22 @@
 import argparse
 
-from .experiment import Experiment
+from .exp_group import ExpGroup
 
 
 def add_param(args):
-    exps = Experiment.gather(args.run)
+    exps = ExpGroup.gather(args.run)
     for exp in exps:
         exp.add_parameter(args.param, args.value)
 
 
 def mv_param(args):
-    exps = Experiment.gather(args.run)
+    exps = ExpGroup.gather(args.run)
     for exp in exps:
         exp.rename_parameter(args.param, args.new_param)
 
 
 def rm_param(args):
-    exps = Experiment.gather(args.run)
+    exps = ExpGroup.gather(args.run)
     for exp in exps:
         exp.remove_parameter(args.param)
 
