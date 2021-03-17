@@ -1,4 +1,5 @@
 import argparse
+import ast
 import os
 import hashlib
 import shutil
@@ -16,7 +17,12 @@ def use_hash_naming(use_hashes=True):
     global hash_naming
     assert isinstance(use_hashes, bool), "Value must be a boolean."
     hash_naming = use_hashes
-    
+
+def _guessed_cast(x):
+    try:
+        return ast.literal_eval(x)
+    except:
+        return x
 
 def exp_filter(string):
     if '=' not in string:
@@ -24,7 +30,7 @@ def exp_filter(string):
             'Filter {} is not in format <param1>=<value1>[, <param2>=<value2>[, ...]]'.format(string))
     filters = string.split(',')
     filters = map(lambda x: x.split('='), filters)
-    filters = {k: v for k, v in filters}
+    filters = {k: _guessed_cast(v) for k, v in filters}
     return filters
 
 
