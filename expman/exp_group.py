@@ -94,3 +94,6 @@ class ExpGroup:
 
     def __iter__(self):
         return iter(self.experiments)
+
+    def __len__(self):
+        return len(self.experiments)
