@@ -64,7 +64,7 @@ class ExpGroup:
 
     def filter(self, filters):
         if isinstance(filters, str):
-            filters = string.split(',')
+            filters = filters.split(',')
             filters = map(lambda x: x.split('='), filters)
             filters = {k: v for k, v in filters}
 
