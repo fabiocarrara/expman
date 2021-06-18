@@ -92,6 +92,10 @@ class ExpGroup:
 
         return self.experiments
 
+    def sort(self, key=None, reverse=False):
+        sorted_exps = sorted(self.experiments, key=key, reverse=reverse)
+        return ExpGroup(sorted_exps)
+
     def __iter__(self):
         return iter(self.experiments)
 
