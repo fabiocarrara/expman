@@ -159,7 +159,7 @@ class Experiment:
         s = StringIO()
         print('Experiment Dir: {}'.format(self.path), file=s)
         print('Params:', file=s)
-        with pd.option_context('display.width', None), pd.option_context('max_columns', None):
+        with pd.option_context('display.width', None), pd.option_context('display.max_columns', None):
             self.params.to_string(s)
 
         return s.getvalue()
