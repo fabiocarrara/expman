@@ -49,6 +49,7 @@ class Experiment:
 
         sep = ''
         if isinstance(value, str):
+            value = ''.join(c if c not in '<>:"|?*\\/' else '-' for c in value)
             sep = '-'
         elif isinstance(value, numbers.Number):
             value = '{:g}'.format(value)
