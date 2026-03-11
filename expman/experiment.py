@@ -96,7 +96,16 @@ class Experiment:
                 return True
 
         return False
-    
+
+    @classmethod
+    def is_child_exp_dir(cls, exp_dir):
+        if not cls.is_exp_dir(exp_dir):
+            return False
+
+        subdirs = (d for d in os.listdir(exp_dir) if os.path.isdir(d))
+        has_subexps = any(cls.is_exp_dir(d) for d in subdirs)
+        return not has_subexps
+
     @classmethod
     def update_exp_dir(cls, exp_dir):
         exp_dir = exp_dir.rstrip('/')

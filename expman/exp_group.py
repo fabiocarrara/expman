@@ -7,7 +7,11 @@ from .experiment import Experiment
 
 class ExpGroup:
     @classmethod
-    def gather(cls, root='runs/'):
+    def gather(cls, root='runs/', children=False):
+        if children:
+            exps = glob(os.path.join(root, '*'))
+            exps = filter(Experiment.is_exp_dir, exps)
+
         if Experiment.is_exp_dir(root):
             exps = (root,)
         else:
