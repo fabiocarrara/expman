@@ -74,7 +74,7 @@ class Experiment:
             abbrev_params = {k: '{}{}{}'.format(*cls._abbr(k, v, params)) for k, v in params.items()}
             abbrev = sorted(abbrev_params.values())
             exp_name = '_'.join(abbrev)
-        
+
         return exp_name
 
     @classmethod
@@ -119,12 +119,12 @@ class Experiment:
 
         params = cls._read_params(params)
         new_name = cls.abbreviate(params)
-        
+
         if name != new_name:
             new_exp_dir = os.path.join(root, new_name)
             assert not os.path.exists(new_exp_dir), \
                 "Destination experiment directory already exists: '{}'".format(new_exp_dir)
-            
+
             print('Renaming:\n  {} into\n  {}'.format(exp_dir, new_exp_dir))
             shutil.move(exp_dir, new_exp_dir)
 
@@ -136,10 +136,10 @@ class Experiment:
         # parameters of this run
         if isinstance(params, argparse.Namespace):
             params = vars(params)
-        
+
         def _sanitize(v):
             return tuple(v) if isinstance(v, list) else v
-            
+
         params = {k: _sanitize(v) for k, v in params.items() if k not in self.ignore}
         self.params = pd.Series(params, name='params')
 
@@ -210,7 +210,7 @@ class Experiment:
             self.path = os.path.join(self.root, self.name)
             assert not os.path.exists(self.path), "Cannot rename run, new name exists: '{}'".format(self.path)
             shutil.move(old_run_dir, self.path)
-    
+
     @staticmethod
     def _read_params(path):
         # read json to pd.Series
@@ -218,7 +218,7 @@ class Experiment:
         # transform lists to tuples (for hashability)
         params = params.apply(lambda x: tuple(x) if isinstance(x, list) else x)
         return params
-    
+
     def write_params(self):
         # write Series as json
         self.params.to_json(self.path_to(self.PARAM_FILENAME))
