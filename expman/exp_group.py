@@ -8,38 +8,29 @@ from .experiment import Experiment
 class ExpGroup:
     @classmethod
     def gather(cls, root='runs/', include_parents=False):
-        """Gather experiments, recursively collecting all sub-experiments.
+        """Gather experiments recursively.
         
-        By default, only returns leaf experiments (those without sub-experiments).
-        Set include_parents=True to include parent experiments with children.
+        By default, returns only leaf experiments. Set include_parents=True 
+        to include parent experiments with children.
         """
-
         def _gather_recursive(path):
-            exps = []
+            if not Experiment.is_exp_dir(path):
+                return []
             
-            if Experiment.is_exp_dir(path):
-                exp = Experiment.from_dir(path)
-                if exp.existing:
-                    # Include this experiment if it's a leaf (has no children)
-                    # OR if include_parents is True
-                    if include_parents or Experiment.is_child_exp_dir(path):
-                        exps.append(exp)
-                
-                # Recursively gather sub-experiments from subdirectories
-                subdirs = glob(os.path.join(path, '*'))
-                subdirs = [d for d in subdirs if os.path.isdir(d)]
-                
-                for subdir in subdirs:
-                    exps.extend(_gather_recursive(subdir))
+            exp = Experiment.from_dir(path)
+            exps = [exp] if exp.existing and (include_parents or Experiment.is_child_exp_dir(path)) else []
             
+            subdirs = [d for d in glob(os.path.join(path, '*')) if os.path.isdir(d)]
+            for subdir in subdirs:
+                exps.extend(_gather_recursive(subdir))
             return exps
         
+        # Always use recursive approach
         if Experiment.is_exp_dir(root):
             exps = _gather_recursive(root)
         else:
             exps = []
-            items = glob(os.path.join(root, '*'))
-            for item in items:
+            for item in glob(os.path.join(root, '*')):
                 if os.path.isdir(item):
                     exps.extend(_gather_recursive(item))
         
@@ -51,8 +42,7 @@ class ExpGroup:
 
     @staticmethod
     def _collect_one(exp_id, exp, csv=None, index_col=None):
-        # Use full_params (includes parent params) for the row
-        params = exp.full_params.to_frame().transpose().infer_objects()  # as DataFrame
+        params = exp.full_params.to_frame().transpose().infer_objects()
         params['exp_id'] = exp_id
 
         if csv is None:
@@ -61,13 +51,11 @@ class ExpGroup:
         csv_path = exp.path_to(csv)
         if os.path.exists(csv_path):
             stuff = pd.read_csv(csv_path, index_col=index_col)
-        else:  # try globbing
-            csv_files = os.path.join(exp.path, csv)
-            csv_files = list(glob(csv_files))
-            if len(csv_files) == 0:
+        else:
+            csv_files = glob(os.path.join(exp.path, csv))
+            if not csv_files:
                 return pd.DataFrame()
-
-            stuff = map(lambda x: pd.read_csv(x, index_col=index_col, float_precision='round_trip'), csv_files)
+            stuff = [pd.read_csv(f, index_col=index_col, float_precision='round_trip') for f in csv_files]
             stuff = pd.concat(stuff, ignore_index=True)
 
         stuff['exp_id'] = exp_id
@@ -78,46 +66,36 @@ class ExpGroup:
         results = pd.concat(results, ignore_index=True, sort=False)
 
         if len(results):
-            # build minimal exp_name
-            exp_name = ''
+            # Build minimal exp_name from varying parameters
             params = results.loc[:, :'exp_id'].drop('exp_id', axis=1)
+            exp_name = ''
             if len(params) > 1:
-                varying_params = params.loc[:, params.nunique() > 1]
-                exp_name = varying_params.apply(Experiment.abbreviate, axis=1)
-            idx = results.columns.get_loc('exp_id') + 1
-            results.insert(idx, 'exp_name', prefix + exp_name)
+                varying = params.loc[:, params.nunique() > 1]
+                exp_name = varying.apply(Experiment.abbreviate, axis=1)
+            results.insert(results.columns.get_loc('exp_id') + 1, 'exp_name', prefix + exp_name)
 
         return results
 
     def filter(self, filters):
         if isinstance(filters, str):
-            filters = filters.split(',')
-            filters = map(lambda x: x.split('='), filters)
-            filters = {k: v for k, v in filters}
-
-        def __filter_exp(e):
+            filters = {k: v for k, v in (x.split('=') for x in filters.split(','))}
+        
+        def matches(exp):
             for param, value in filters.items():
                 try:
-                    p = e.params[param]
-                    ptype = type(p)
-                    if p != ptype(value):
+                    if exp.params[param] != type(exp.params[param])(value):
                         return False
-                except:
+                except (KeyError, ValueError, TypeError):
                     return False
-
             return True
-
-        filtered_exps = filter(__filter_exp, self.experiments)
-        filtered_exps = tuple(filtered_exps)
-        return ExpGroup(filtered_exps)
+        
+        return ExpGroup(tuple(e for e in self.experiments if matches(e)))
 
     def items(self, short_names=True, prefix=''):
-        if short_names:
-            params = self.collect(prefix=prefix)
-            exp_names = params['exp_name'].values
-            return zip(exp_names, self.experiments)
-
-        return self.experiments
+        if not short_names:
+            return self.experiments
+        params = self.collect(prefix=prefix)
+        return zip(params['exp_name'].values, self.experiments)
 
     def sort(self, key=None, reverse=False):
         sorted_exps = sorted(self.experiments, key=key, reverse=reverse)

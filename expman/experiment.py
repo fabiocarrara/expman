@@ -28,10 +28,7 @@ def exp_filter(string):
     if '=' not in string:
         raise argparse.ArgumentTypeError(
             'Filter {} is not in format <param1>=<value1>[, <param2>=<value2>[, ...]]'.format(string))
-    filters = string.split(',')
-    filters = map(lambda x: x.split('='), filters)
-    filters = {k: _guessed_cast(v) for k, v in filters}
-    return filters
+    return {k: _guessed_cast(v) for k, v in (x.split('=') for x in string.split(','))}
 
 
 class Experiment:
@@ -87,33 +84,20 @@ class Experiment:
         assert os.path.exists(params_path), "Empty run directory found: '{}'".format(params_path)
 
         params = cls._read_params(params_path)
-        
-        # Determine parent from filesystem: if parent directory is an experiment, it's our parent
-        parent = None
-        if cls.is_exp_dir(root):
-            parent = cls.from_dir(root)
-        
         exp = cls(params, root=root, create=False)
-        exp.parent = parent
+
         return exp
 
     @classmethod
     def is_exp_dir(cls, exp_dir):
-        if os.path.isdir(exp_dir):
-            params = os.path.join(exp_dir, cls.PARAM_FILENAME)
-            if os.path.exists(params):
-                return True
-
-        return False
+        return os.path.isdir(exp_dir) and os.path.exists(os.path.join(exp_dir, cls.PARAM_FILENAME))
 
     @classmethod
     def is_child_exp_dir(cls, exp_dir):
         if not cls.is_exp_dir(exp_dir):
             return False
-
-        subdirs = (os.path.join(exp_dir, d) for d in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, d)))
-        has_subexps = any(cls.is_exp_dir(d) for d in subdirs)
-        return not has_subexps
+        subdirs = [os.path.join(exp_dir, d) for d in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, d))]
+        return not any(cls.is_exp_dir(d) for d in subdirs)
 
     @classmethod
     def update_exp_dir(cls, exp_dir):
@@ -137,27 +121,21 @@ class Experiment:
             shutil.move(exp_dir, new_exp_dir)
 
     def __init__(self, params, root='runs/', ignore=(), create=True):
-        # relative dir containing this run
-        self.root = root
-        # params to be ignored in the run naming
-        self.ignore = ignore
-        # parent experiment will be set by from_dir if applicable
-        self.parent = None
+        self.root = root  # dir containing this run
+        self.ignore = ignore  # params to be ignored in the run naming
+        self.parent = None  # parent experiment, if any
+        self.create = create  # whether to create the run directory if not exists
         
-        # parameters of this run
+        # Normalize parameters
         if isinstance(params, argparse.Namespace):
             params = vars(params)
-
         def _sanitize(v):
             return tuple(v) if isinstance(v, list) else v
 
         params = {k: _sanitize(v) for k, v in params.items() if k not in self.ignore}
         self.params = pd.Series(params, name='params')
 
-        # whether to create the run directory if not exists
-        self.create = create
-
-        # Use full_params for naming (includes parent params if applicable)
+        # Set up directory
         self.name = self.abbreviate(self.full_params)
         self.path = os.path.join(self.root, self.name)
         self.existing = os.path.exists(self.path)
@@ -170,13 +148,12 @@ class Experiment:
                 self.existing = True
             else:
                 print("Run directory '{}' not found, but not created.".format(self.path))
-
         else:
             param_fname = self.path_to(self.PARAM_FILENAME)
             assert os.path.exists(param_fname), "Empty run, parameters not found: '{}'".format(param_fname)
             self.params = self._read_params(param_fname)
         
-        # Determine parent from filesystem: if root is an experiment directory, it's our parent
+        # Detect parent from filesystem
         if Experiment.is_exp_dir(self.root):
             self.parent = Experiment.from_dir(self.root)
 
@@ -216,10 +193,7 @@ class Experiment:
     def rename_parameter(self, key, new_key):
         assert key in self.params, "Cannot rename non-existent parameter: '{}'".format(key)
         assert new_key not in self.params, "Destination name for parameter exists: '{}'".format(key)
-
-        self.params[new_key] = self.params[key]
-        del self.params[key]
-
+        self.params[new_key] = self.params.pop(key)
         self._update_run_dir()
         self.write_params()
 
@@ -230,12 +204,15 @@ class Experiment:
         self.write_params()
 
     def _update_run_dir(self):
-        old_run_dir = self.path
-        if self.existing:
-            self.name = self.abbreviate(self.params)
-            self.path = os.path.join(self.root, self.name)
+        """Rename directory if parameter names change."""
+        if not self.existing:
+            return
+        old_path = self.path
+        self.name = self.abbreviate(self.params)
+        self.path = os.path.join(self.root, self.name)
+        if old_path != self.path:
             assert not os.path.exists(self.path), "Cannot rename run, new name exists: '{}'".format(self.path)
-            shutil.move(old_run_dir, self.path)
+            shutil.move(old_path, self.path)
 
     @staticmethod
     def _read_params(path):
