@@ -7,21 +7,43 @@ from .experiment import Experiment
 
 class ExpGroup:
     @classmethod
-    def gather(cls, root='runs/', children=False):
-        if children:
-            exps = glob(os.path.join(root, '*'))
-            exps = filter(Experiment.is_exp_dir, exps)
+    def gather(cls, root='runs/', include_parents=False):
+        """Gather experiments, recursively collecting all sub-experiments.
+        
+        By default, only returns leaf experiments (those without sub-experiments).
+        Set include_parents=True to include parent experiments with children.
+        """
 
+        def _gather_recursive(path):
+            exps = []
+            
+            if Experiment.is_exp_dir(path):
+                exp = Experiment.from_dir(path)
+                if exp.existing:
+                    # Include this experiment if it's a leaf (has no children)
+                    # OR if include_parents is True
+                    if include_parents or Experiment.is_child_exp_dir(path):
+                        exps.append(exp)
+                
+                # Recursively gather sub-experiments from subdirectories
+                subdirs = glob(os.path.join(path, '*'))
+                subdirs = [d for d in subdirs if os.path.isdir(d)]
+                
+                for subdir in subdirs:
+                    exps.extend(_gather_recursive(subdir))
+            
+            return exps
+        
         if Experiment.is_exp_dir(root):
-            exps = (root,)
+            exps = _gather_recursive(root)
         else:
-            exps = glob(os.path.join(root, '*'))
-            exps = filter(Experiment.is_exp_dir, exps)
-
-        exps = map(Experiment.from_dir, exps)
-        exps = filter(lambda x: x.existing, exps)
-        exps = tuple(exps)
-        return cls(exps)
+            exps = []
+            items = glob(os.path.join(root, '*'))
+            for item in items:
+                if os.path.isdir(item):
+                    exps.extend(_gather_recursive(item))
+        
+        return cls(tuple(exps))
 
     def __init__(self, experiments=()):
         assert isinstance(experiments, (list, tuple)), "'experiments' must be a list or tuple"
@@ -29,7 +51,8 @@ class ExpGroup:
 
     @staticmethod
     def _collect_one(exp_id, exp, csv=None, index_col=None):
-        params = exp.params.to_frame().transpose().infer_objects()  # as DataFrame
+        # Use full_params (includes parent params) for the row
+        params = exp.full_params.to_frame().transpose().infer_objects()  # as DataFrame
         params['exp_id'] = exp_id
 
         if csv is None:

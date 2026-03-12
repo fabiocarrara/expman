@@ -79,14 +79,22 @@ class Experiment:
 
     @classmethod
     def from_dir(cls, exp_dir):
-        root = os.path.dirname(exp_dir.rstrip('/'))
-        params = os.path.join(exp_dir, cls.PARAM_FILENAME)
+        exp_dir = exp_dir.rstrip('/')
+        root = os.path.dirname(exp_dir)
+        params_path = os.path.join(exp_dir, cls.PARAM_FILENAME)
 
         assert os.path.exists(exp_dir), "Experiment directory not found: '{}'".format(exp_dir)
-        assert os.path.exists(params), "Empty run directory found: '{}'".format(params)
+        assert os.path.exists(params_path), "Empty run directory found: '{}'".format(params_path)
 
-        params = cls._read_params(params)
+        params = cls._read_params(params_path)
+        
+        # Determine parent from filesystem: if parent directory is an experiment, it's our parent
+        parent = None
+        if cls.is_exp_dir(root):
+            parent = cls.from_dir(root)
+        
         exp = cls(params, root=root, create=False)
+        exp.parent = parent
         return exp
 
     @classmethod
@@ -103,7 +111,7 @@ class Experiment:
         if not cls.is_exp_dir(exp_dir):
             return False
 
-        subdirs = (d for d in os.listdir(exp_dir) if os.path.isdir(d))
+        subdirs = (os.path.join(exp_dir, d) for d in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, d)))
         has_subexps = any(cls.is_exp_dir(d) for d in subdirs)
         return not has_subexps
 
@@ -133,6 +141,9 @@ class Experiment:
         self.root = root
         # params to be ignored in the run naming
         self.ignore = ignore
+        # parent experiment will be set by from_dir if applicable
+        self.parent = None
+        
         # parameters of this run
         if isinstance(params, argparse.Namespace):
             params = vars(params)
@@ -146,7 +157,8 @@ class Experiment:
         # whether to create the run directory if not exists
         self.create = create
 
-        self.name = self.abbreviate(self.params)
+        # Use full_params for naming (includes parent params if applicable)
+        self.name = self.abbreviate(self.full_params)
         self.path = os.path.join(self.root, self.name)
         self.existing = os.path.exists(self.path)
         self.found = self.existing
@@ -163,6 +175,10 @@ class Experiment:
             param_fname = self.path_to(self.PARAM_FILENAME)
             assert os.path.exists(param_fname), "Empty run, parameters not found: '{}'".format(param_fname)
             self.params = self._read_params(param_fname)
+        
+        # Determine parent from filesystem: if root is an experiment directory, it's our parent
+        if Experiment.is_exp_dir(self.root):
+            self.parent = Experiment.from_dir(self.root)
 
 
     def __str__(self):
@@ -176,6 +192,16 @@ class Experiment:
 
     def __repr__(self):
         return self.__str__()
+
+    @property
+    def full_params(self):
+        """Return combined params from parent hierarchy and this experiment."""
+        if self.parent is None:
+            return self.params.copy()
+        else:
+            full = self.parent.full_params.copy()
+            full = pd.concat([full, self.params])
+            return full
 
     def path_to(self, path):
         path = os.path.join(self.path, path)
