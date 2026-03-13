@@ -12,11 +12,147 @@ class TestBasic(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
 
+    # ===== BASIC EXPERIMENT CREATION AND PROPERTIES =====
+
     def test_main(self):
+        """Test basic experiment creation with various parameter types."""
         params = {'a': 1, 'b': 2.0, 'c': 'asd', 'd': (1, 2.0, 'bsd')}
         exp = expman.Experiment(params, root=self.root)
-        print(exp.path)
-        self.assertTrue(True)
+        self.assertTrue(os.path.exists(exp.path))
+        self.assertEqual(exp.params['a'], 1)
+        self.assertEqual(exp.params['b'], 2.0)
+
+    def test_parameter_types(self):
+        """Test that various parameter types are correctly stored and retrieved."""
+        params = {
+            'int_param': 42,
+            'float_param': 3.14,
+            'str_param': 'test',
+            'tuple_param': (1, 2, 3),
+            'list_param': [4, 5, 6],
+            'dict_param': {'nested': 'value'}
+        }
+        exp = expman.Experiment(params, root=self.root)
+        
+        self.assertEqual(exp.params['int_param'], 42)
+        self.assertEqual(exp.params['float_param'], 3.14)
+        self.assertEqual(exp.params['str_param'], 'test')
+        self.assertEqual(exp.params['tuple_param'], (1, 2, 3))
+        # Note: lists are converted to tuples by Experiment class
+        self.assertEqual(exp.params['list_param'], (4, 5, 6))
+        self.assertEqual(exp.params['dict_param'], {'nested': 'value'})
+
+    def test_experiment_path_and_directory(self):
+        """Test that experiment creates proper directory structure."""
+        params = {'model': 'cnn', 'lr': 0.01}
+        exp = expman.Experiment(params, root=self.root)
+        
+        # Check that experiment directory exists
+        self.assertTrue(os.path.isdir(exp.path))
+        
+        # Check that params.json exists
+        params_file = os.path.join(exp.path, 'params.json')
+        self.assertTrue(os.path.isfile(params_file))
+
+    def test_abbreviation(self):
+        """Test parameter abbreviation for directory naming."""
+        params = {'learning_rate': 0.01, 'batch_size': 32}
+        exp = expman.Experiment(params, root=self.root)
+        
+        # Experiment name should be in the path
+        self.assertTrue(os.path.exists(exp.path))
+        
+        # All params should be abbreviated in directory name
+        dir_name = os.path.basename(exp.path)
+        self.assertIn('l', dir_name)  # abbreviation of learning_rate
+        self.assertIn('b', dir_name)  # abbreviation of batch_size
+
+    def test_string_representation(self):
+        """Test __str__ and __repr__ methods."""
+        params = {'a': 1}
+        exp = expman.Experiment(params, root=self.root)
+        
+        str_repr = str(exp)
+        self.assertIsInstance(str_repr, str)
+        self.assertTrue(len(str_repr) > 0)
+
+    def test_path_to_method(self):
+        """Test path_to() method for file path resolution."""
+        params = {'a': 1}
+        exp = expman.Experiment(params, root=self.root)
+        
+        test_file = exp.path_to('output.txt')
+        self.assertTrue(test_file.startswith(exp.path))
+        self.assertTrue(test_file.endswith('output.txt'))
+
+    # ===== PARAMETER MODIFICATION =====
+
+    def test_add_parameter(self):
+        """Test adding a new parameter to an existing experiment."""
+        params = {'a': 1}
+        exp = expman.Experiment(params, root=self.root)
+        
+        exp.add_parameter('b', 2)
+        self.assertEqual(exp.params['b'], 2)
+        self.assertEqual(exp.params['a'], 1)
+        
+        # Verify it's persisted to disk
+        reloaded = expman.Experiment.from_dir(exp.path)
+        self.assertEqual(reloaded.params['b'], 2)
+
+    def test_rename_parameter(self):
+        """Test renaming an existing parameter."""
+        params = {'old_name': 42}
+        exp = expman.Experiment(params, root=self.root)
+        
+        exp.rename_parameter('old_name', 'new_name')
+        self.assertEqual(exp.params['new_name'], 42)
+        self.assertNotIn('old_name', exp.params.index)
+        
+        # Verify it's persisted to disk
+        reloaded = expman.Experiment.from_dir(exp.path)
+        self.assertEqual(reloaded.params['new_name'], 42)
+
+    def test_remove_parameter(self):
+        """Test removing a parameter from an experiment."""
+        params = {'a': 1, 'b': 2}
+        exp = expman.Experiment(params, root=self.root)
+        
+        exp.remove_parameter('a')
+        self.assertNotIn('a', exp.params.index)
+        self.assertEqual(exp.params['b'], 2)
+        
+        # Verify it's persisted to disk
+        reloaded = expman.Experiment.from_dir(exp.path)
+        self.assertNotIn('a', reloaded.params.index)
+
+    # ===== DIRECTORY UTILITIES =====
+
+    def test_is_exp_dir(self):
+        """Test that is_exp_dir correctly identifies experiment directories."""
+        params = {'a': 1}
+        exp = expman.Experiment(params, root=self.root)
+        
+        # Experiment directory should be recognized
+        self.assertTrue(expman.Experiment.is_exp_dir(exp.path))
+        
+        # Non-experiment directory should not be recognized
+        other_dir = os.path.join(self.root, 'not_exp')
+        os.makedirs(other_dir)
+        self.assertFalse(expman.Experiment.is_exp_dir(other_dir))
+
+    def test_is_child_exp_dir(self):
+        """Test that is_child_exp_dir correctly identifies leaf experiments."""
+        parent = expman.Experiment({'a': 1}, root=self.root)
+        child = expman.Experiment({'b': 2}, root=parent.path)
+        
+        # Parent has children, so should not be a child exp dir (it's a parent)
+        self.assertFalse(expman.Experiment.is_child_exp_dir(parent.path))
+        
+        # Child has no children, so should be a child exp dir (it's a leaf)
+        self.assertTrue(expman.Experiment.is_child_exp_dir(child.path))
+
+    # ===== PARENT-CHILD RELATIONSHIPS =====
 
     def test_parent_child_basic(self):
         """Test basic sub-experiment creation with parent parameter inheritance."""
@@ -100,7 +236,9 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(child.full_params['a'], 1)
         self.assertEqual(child.full_params['b'], 2)
         self.assertEqual(child.full_params['c'], 3)
-    
+
+    # ===== EXPGROUP GATHERING AND COLLECTION =====
+
     def test_gather_nested_experiments(self):
         """Test that gather by default only collects leaf experiments."""
         # Create parent experiment
@@ -144,6 +282,45 @@ class TestBasic(unittest.TestCase):
         group_all = expman.ExpGroup.gather(root=self.root, include_parents=True)
         df_all = group_all.collect()
         self.assertEqual(len(df_all), 2)
+
+    def test_collect_simple_experiments(self):
+        """Test collect() for simple (non-nested) experiments."""
+        # Create two simple experiments
+        exp1 = expman.Experiment({'model': 'cnn', 'lr': 0.01}, root=self.root)
+        exp2 = expman.Experiment({'model': 'mlp', 'lr': 0.001}, root=self.root)
+        
+        # Gather and collect
+        group = expman.ExpGroup.gather(root=self.root)
+        df = group.collect()
+        
+        # Should have 2 rows
+        self.assertEqual(len(df), 2)
+        # Columns: model, lr, exp_id, exp_name
+        self.assertIn('model', df.columns)
+        self.assertIn('lr', df.columns)
+        self.assertIn('exp_id', df.columns)
+        
+        # Check that both experiments are present
+        models = sorted(df['model'].tolist())
+        self.assertEqual(models, ['cnn', 'mlp'])
+
+    def test_collect_without_csv(self):
+        """Test collect() returns only parameters when no CSV metrics are present."""
+        # Create experiments
+        exp = expman.Experiment({'a': 1, 'b': 2}, root=self.root)
+        
+        # Collect without CSV metrics
+        group = expman.ExpGroup.gather(root=self.root)
+        df = group.collect()
+        
+        # Should have parameters plus exp_id
+        self.assertIn('a', df.columns)
+        self.assertIn('b', df.columns)
+        self.assertEqual(len(df), 1)
+        self.assertEqual(df['a'].iloc[0], 1)
+        self.assertEqual(df['b'].iloc[0], 2)
+
+    # ===== CSV METRICS TESTS =====
 
     def test_collect_with_csv_simple(self):
         """Test collect() with CSV metrics in simple (non-nested) experiments."""
@@ -264,6 +441,151 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(len(child_rows), 2)
         self.assertTrue((child_rows['model'] == 'cnn').all())
         self.assertListEqual(child_rows['accuracy'].tolist(), [0.8, 0.85])
+
+    # ===== FILTERING AND ITERATION =====
+
+    def test_filter_basic(self):
+        """Test filtering experiments by parameter values."""
+        exp1 = expman.Experiment({'model': 'cnn', 'lr': 0.01}, root=self.root)
+        exp2 = expman.Experiment({'model': 'mlp', 'lr': 0.01}, root=self.root)
+        exp3 = expman.Experiment({'model': 'cnn', 'lr': 0.001}, root=self.root)
+        
+        group = expman.ExpGroup.gather(root=self.root)
+        
+        # Filter by model
+        cnn_group = group.filter('model=cnn')
+        self.assertEqual(len(cnn_group.experiments), 2)
+        
+        # Filter by learning rate
+        lr_001_group = group.filter('lr=0.01')
+        self.assertEqual(len(lr_001_group.experiments), 2)
+
+    def test_filter_multiple_params(self):
+        """Test filtering experiments by multiple parameters."""
+        exp1 = expman.Experiment({'model': 'cnn', 'lr': 0.01}, root=self.root)
+        exp2 = expman.Experiment({'model': 'mlp', 'lr': 0.01}, root=self.root)
+        exp3 = expman.Experiment({'model': 'cnn', 'lr': 0.001}, root=self.root)
+        
+        group = expman.ExpGroup.gather(root=self.root)
+        
+        # Filter by multiple parameters
+        filtered = group.filter('model=cnn,lr=0.01')
+        self.assertEqual(len(filtered.experiments), 1)
+        
+        df = filtered.collect()
+        self.assertEqual(df['model'].iloc[0], 'cnn')
+        self.assertEqual(df['lr'].iloc[0], 0.01)
+
+    def test_items_iteration(self):
+        """Test iterating over experiments with items()."""
+        exp1 = expman.Experiment({'a': 1}, root=self.root)
+        exp2 = expman.Experiment({'a': 2}, root=self.root)
+        
+        group = expman.ExpGroup.gather(root=self.root)
+        
+        # Test iteration with items(short_names=False) returns just experiments
+        items_list = list(group.items(short_names=False))
+        self.assertEqual(len(items_list), 2)
+        
+        # Each item should be an Experiment instance
+        for exp in items_list:
+            self.assertIsInstance(exp, expman.Experiment)
+        
+        # Test iteration with items(short_names=True) returns (name, exp) tuples
+        named_items = list(group.items(short_names=True))
+        self.assertEqual(len(named_items), 2)
+        for name, exp in named_items:
+            self.assertIsInstance(name, str)
+            self.assertIsInstance(exp, expman.Experiment)
+
+    def test_group_iteration(self):
+        """Test iterating over experiments directly."""
+        exp1 = expman.Experiment({'a': 1}, root=self.root)
+        exp2 = expman.Experiment({'a': 2}, root=self.root)
+        
+        group = expman.ExpGroup.gather(root=self.root)
+        
+        # Test direct iteration
+        exp_list = list(group)
+        self.assertEqual(len(exp_list), 2)
+        
+        # All items should be Experiment instances
+        for exp in exp_list:
+            self.assertIsInstance(exp, expman.Experiment)
+
+    def test_group_length(self):
+        """Test len() on ExpGroup."""
+        exp1 = expman.Experiment({'a': 1}, root=self.root)
+        exp2 = expman.Experiment({'a': 2}, root=self.root)
+        
+        group = expman.ExpGroup.gather(root=self.root)
+        
+        self.assertEqual(len(group), 2)
+
+    def test_sort_experiments(self):
+        """Test sorting experiments by parameter values."""
+        exp1 = expman.Experiment({'value': 30}, root=self.root)
+        exp2 = expman.Experiment({'value': 10}, root=self.root)
+        exp3 = expman.Experiment({'value': 20}, root=self.root)
+        
+        group = expman.ExpGroup.gather(root=self.root)
+        
+        # Sort by parameter value
+        sorted_group = group.sort(key=lambda e: e.params['value'])
+        values = [e.params['value'] for e in sorted_group]
+        self.assertEqual(values, [10, 20, 30])
+        
+        # Sort in reverse
+        sorted_group_rev = group.sort(key=lambda e: e.params['value'], reverse=True)
+        values_rev = [e.params['value'] for e in sorted_group_rev]
+        self.assertEqual(values_rev, [30, 20, 10])
+
+    # ===== EDGE CASES AND ERROR HANDLING =====
+
+    def test_reload_experiment_from_disk(self):
+        """Test reloading experiment from disk preserves all data."""
+        params = {'a': 1, 'b': 2.5, 'c': 'test'}
+        exp = expman.Experiment(params, root=self.root)
+        exp_path = exp.path
+        
+        # Reload and verify
+        reloaded = expman.Experiment.from_dir(exp_path)
+        self.assertEqual(reloaded.params['a'], 1)
+        self.assertEqual(reloaded.params['b'], 2.5)
+        self.assertEqual(reloaded.params['c'], 'test')
+
+    def test_empty_group(self):
+        """Test behavior with empty experiment group."""
+        group = expman.ExpGroup.gather(root=self.root)
+        
+        # Empty group should have length 0
+        self.assertEqual(len(group), 0)
+        
+        # Note: collect() on empty group will raise ValueError from pd.concat
+        # This is expected behavior - empty groups have nothing to collect
+        with self.assertRaises(ValueError):
+            group.collect()
+
+    def test_multiple_parameter_modifications(self):
+        """Test multiple parameter modifications in sequence."""
+        exp = expman.Experiment({'a': 1, 'b': 2}, root=self.root)
+        
+        # Modify multiple times
+        exp.add_parameter('c', 3)
+        exp.rename_parameter('a', 'x')
+        exp.remove_parameter('b')
+        
+        # Verify final state
+        self.assertIn('x', exp.params.index)
+        self.assertIn('c', exp.params.index)
+        self.assertNotIn('a', exp.params.index)
+        self.assertNotIn('b', exp.params.index)
+        
+        # Verify persistence
+        reloaded = expman.Experiment.from_dir(exp.path)
+        self.assertEqual(reloaded.params['x'], 1)
+        self.assertEqual(reloaded.params['c'], 3)
+        self.assertEqual(len(reloaded.params), 2)
 
     def tearDown(self):
         shutil.rmtree(self.root)
