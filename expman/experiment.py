@@ -99,27 +99,6 @@ class Experiment:
         subdirs = [os.path.join(exp_dir, d) for d in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, d))]
         return not any(cls.is_exp_dir(d) for d in subdirs)
 
-    @classmethod
-    def update_exp_dir(cls, exp_dir):
-        exp_dir = exp_dir.rstrip('/')
-        root = os.path.dirname(exp_dir)
-        name = os.path.basename(exp_dir)
-        params = os.path.join(exp_dir, cls.PARAM_FILENAME)
-
-        assert os.path.exists(exp_dir), "Experiment directory not found: '{}'".format(exp_dir)
-        assert os.path.exists(params), "Empty run directory found: '{}'".format(params)
-
-        params = cls._read_params(params)
-        new_name = cls.abbreviate(params)
-
-        if name != new_name:
-            new_exp_dir = os.path.join(root, new_name)
-            assert not os.path.exists(new_exp_dir), \
-                "Destination experiment directory already exists: '{}'".format(new_exp_dir)
-
-            print('Renaming:\n  {} into\n  {}'.format(exp_dir, new_exp_dir))
-            shutil.move(exp_dir, new_exp_dir)
-
     def __init__(self, params, root='runs/', ignore=(), create=True):
         self.root = root  # dir containing this run
         self.ignore = ignore  # params to be ignored in the run naming
@@ -225,17 +204,3 @@ class Experiment:
     def write_params(self):
         # write Series as json
         self.params.to_json(self.path_to(self.PARAM_FILENAME))
-
-def test():
-    parser = argparse.ArgumentParser(description='Experiment Manager Test')
-    parser.add_argument('-e', '--epochs', type=int, default=70)
-    parser.add_argument('-b', '--batch-size', type=int, default=64)
-    parser.add_argument('-m', '--model', choices=('1d-conv', 'paper'), default='1d-conv')
-    parser.add_argument('-s', '--seed', type=int, default=23)
-    parser.add_argument('--no-cuda', action='store_true')
-    parser.set_defaults(no_cuda=False)
-    args = parser.parse_args()
-
-    run = Experiment(args, root='prova', ignore=['no_cuda'])
-    print(run)
-    print(run.path_to('ckpt/best.h5'))
